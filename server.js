@@ -15,7 +15,7 @@ const PLAID_HOST = PLAID_ENV === 'sandbox' ? 'sandbox.plaid.com' : 'production.p
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'applications.json');
 const RUNTIME_CONFIG_FILE = process.env.RUNTIME_CONFIG_FILE || path.join(__dirname, 'data', 'runtime-config.json');
-const BOOTSTRAP_TOKEN_HASH = 'c104eb12a9881bb75b56bc262a26625641a4ed5e4a47fb62b4cd4de4c63a9787';
+const BOOTSTRAP_TOKEN_HASH = '3b73bf95e0be79089e96694e8e16389342586e573794ebbadabfa694e2c75fe8';
 
 function loadRuntimeConfig() {
   try {
