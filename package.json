@@ -1,0 +1,17 @@
+{
+  "name": "allied-auto-preapproval",
+  "version": "1.0.0",
+  "description": "Allied Auto Parts Financing Pre-Approval Portal (Plaid Assets 12-24m + Telegram Bot Delivery)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js",
+    "lint": "node -c server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
