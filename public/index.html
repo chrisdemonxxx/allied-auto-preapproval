@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- build: 2026-11-11-dob-year-select -->
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -41,6 +42,7 @@
     }
     a { color: inherit; text-decoration: none; }
 
+    /* Top Promo Bar (matches alliedautoparts.online) */
     .promo-bar {
       background: linear-gradient(90deg, var(--amber) 0%, var(--flame) 100%);
       color: var(--ink-950);
@@ -55,6 +57,7 @@
       text-underline-offset: 2px;
     }
 
+    /* Sticky Navbar (matches alliedautoparts.online) */
     .navbar-wrap {
       position: sticky;
       top: 0;
@@ -128,6 +131,7 @@
       .nav-links, .phone-pill { display: none; }
     }
 
+    /* Main Content */
     .main {
       flex: 1;
       max-width: 1120px;
@@ -143,7 +147,10 @@
       .main { grid-template-columns: 1fr; gap: 24px; padding-top: 24px; }
     }
 
-    .hero-col { padding-top: 8px; }
+    /* Left Hero Column */
+    .hero-col {
+      padding-top: 8px;
+    }
     .pill-badge {
       display: inline-flex;
       align-items: center;
@@ -224,10 +231,23 @@
     }
     .perk-item:last-child { border-bottom: none; padding-bottom: 0; }
     .perk-item:first-child { padding-top: 0; }
-    .perk-icon { font-size: 18px; line-height: 1.2; }
-    .perk-title { font-size: 13.5px; font-weight: 700; color: #fff; }
-    .perk-desc { font-size: 12.5px; color: var(--ink-400); margin-top: 2px; line-height: 1.4; }
+    .perk-icon {
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .perk-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .perk-desc {
+      font-size: 12.5px;
+      color: var(--ink-400);
+      margin-top: 2px;
+      line-height: 1.4;
+    }
 
+    /* Right Form Card */
     .card {
       background: var(--glass);
       backdrop-filter: blur(16px);
@@ -296,6 +316,11 @@
       grid-template-columns: 2fr 1fr 1fr;
       gap: 12px;
     }
+    .dob-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.85fr 1.1fr;
+      gap: 8px;
+    }
     @media (max-width: 560px) {
       .grid, .grid-3 { grid-template-columns: 1fr; }
       .steps { flex-direction: column; gap: 8px; }
@@ -315,10 +340,15 @@
       border: 1px solid rgba(255, 255, 255, 0.14);
       background: rgba(6, 12, 30, 0.85);
       color: #ffffff;
+      color-scheme: dark;
       font-size: 14px;
       font-family: inherit;
       outline: none;
       transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    select option {
+      background: #0a1428;
+      color: #ffffff;
     }
     input::placeholder { color: var(--ink-400); }
     input:focus, select:focus, textarea:focus {
@@ -386,6 +416,7 @@
       margin-bottom: 16px;
     }
 
+    /* Footer (matches alliedautoparts.online) */
     footer {
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       background: rgba(6, 12, 30, 0.9);
@@ -535,12 +566,33 @@
 
         <div class="grid">
           <div class="field">
-            <label for="dob">Date of Birth *</label>
-            <input type="date" id="dob" name="dob" required />
+            <label for="dobMonth">Date of Birth (Month / Day / Year) *</label>
+            <div class="dob-grid">
+              <select id="dobMonth" aria-label="Birth Month" required>
+                <option value="">Month</option>
+                <option value="01">01 - Jan</option>
+                <option value="02">02 - Feb</option>
+                <option value="03">03 - Mar</option>
+                <option value="04">04 - Apr</option>
+                <option value="05">05 - May</option>
+                <option value="06">06 - Jun</option>
+                <option value="07">07 - Jul</option>
+                <option value="08">08 - Aug</option>
+                <option value="09">09 - Sep</option>
+                <option value="10">10 - Oct</option>
+                <option value="11">11 - Nov</option>
+                <option value="12">12 - Dec</option>
+              </select>
+              <select id="dobDay" aria-label="Birth Day" required>
+                <option value="">Day</option>
+              </select>
+              <select id="dobYear" aria-label="Birth Year" required><option value="">Year</option></select>
+            </div>
+            <input type="hidden" id="dob" name="dob" />
           </div>
           <div class="field">
             <label for="ssnLast4">Last 4 Digits of SSN *</label>
-            <input type="text" id="ssnLast4" name="ssnLast4" maxlength="4" pattern="\d{4}" placeholder="1234" required />
+            <input type="text" id="ssnLast4" name="ssnLast4" inputmode="numeric" maxlength="4" pattern="\d{4}" placeholder="1234" required />
           </div>
         </div>
 
@@ -609,10 +661,43 @@
     const errorBox = document.getElementById('errorBox');
     const successView = document.getElementById('successView');
     const refIdDisplay = document.getElementById('refIdDisplay');
+    const dobMonth = document.getElementById('dobMonth');
+    const dobDay = document.getElementById('dobDay');
+    const dobYear = document.getElementById('dobYear');
+    const dobHidden = document.getElementById('dob');
+
+    // Populate Day (01-31) and Year (2008 down to 1925) dropdowns
+    for (let d = 1; d <= 31; d++) {
+      const opt = document.createElement('option');
+      const val = String(d).padStart(2, '0');
+      opt.value = val;
+      opt.textContent = val;
+      dobDay.appendChild(opt);
+    }
+    for (let y = 2008; y >= 1925; y--) {
+      const yopt = document.createElement('option');
+      yopt.value = String(y);
+      yopt.textContent = String(y);
+      dobYear.appendChild(yopt);
+    }
+    function syncDob() {
+      const year = String(dobYear.value || '').trim();
+      const yearOk = /^\d{4}$/.test(year) && Number(year) >= 1925 && Number(year) <= 2008;
+      if (yearOk && dobMonth.value && dobDay.value) {
+        dobHidden.value = year + '-' + dobMonth.value + '-' + dobDay.value;
+      } else {
+        dobHidden.value = '';
+      }
+    }
+    dobMonth.addEventListener('change', syncDob);
+    dobDay.addEventListener('change', syncDob);
+    dobYear.addEventListener('input', syncDob);
+    dobYear.addEventListener('change', syncDob);
 
     function showError(msg) {
       errorBox.textContent = msg;
       errorBox.className = 'alert error';
+      errorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     function clearError() {
       errorBox.className = 'alert';
@@ -626,6 +711,13 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       clearError();
+      syncDob();
+
+      if (!dobHidden.value) {
+        showError('Select month, day, and year for date of birth.');
+        return;
+      }
+
       submitBtn.disabled = true;
       submitBtn.textContent = 'Initializing Secure Plaid Session…';
 
@@ -635,7 +727,7 @@
         vehicleOrPartNotes: document.getElementById('vehicleOrPartNotes').value,
         firstName: document.getElementById('firstName').value,
         lastName: document.getElementById('lastName').value,
-        dob: document.getElementById('dob').value,
+        dob: dobHidden.value,
         ssnLast4: document.getElementById('ssnLast4').value,
         phone: document.getElementById('phone').value,
         email: document.getElementById('email').value,
